@@ -1,3 +1,7 @@
+import os
+# Set OAuth insecure transport for development
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import yfinance as yf
@@ -11,13 +15,16 @@ from sklearn.linear_model import LinearRegression
 import warnings
 import requests
 from requests_oauthlib import OAuth2Session
-import os
 from config import Config
 from models import User, user_session
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Ensure session configuration is set properly
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -230,15 +237,19 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     
+    # Clear any existing session data
+    session.pop('oauth_state', None)
+    
     google = OAuth2Session(
         app.config['GOOGLE_CLIENT_ID'],
-        redirect_uri=request.url_root + 'callback'
+        redirect_uri=request.url_root + 'callback',
+        scope=['openid', 'email', 'profile']
     )
     
+    # Use the recommended v2 endpoint
     authorization_url, state = google.authorization_url(
-        'https://accounts.google.com/o/oauth2/auth',
-        access_type='offline',
-        scope=['openid', 'email', 'profile']
+        'https://accounts.google.com/o/oauth2/v2/auth',
+        access_type='offline'
     )
     
     session['oauth_state'] = state
@@ -248,6 +259,11 @@ def login():
 def callback():
     """Handle OAuth callback from Google"""
     try:
+        # Check if state exists
+        if 'oauth_state' not in session:
+            print("No oauth_state in session")
+            return redirect(url_for('login'))
+        
         google = OAuth2Session(
             app.config['GOOGLE_CLIENT_ID'],
             state=session.get('oauth_state'),
@@ -255,30 +271,37 @@ def callback():
         )
         
         token = google.fetch_token(
-            'https://accounts.googleapis.com/oauth2/v4/token',
+            'https://oauth2.googleapis.com/token',
             client_secret=app.config['GOOGLE_CLIENT_SECRET'],
             authorization_response=request.url
         )
         
         # Get user info from Google
-        resp = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
+        resp = google.get('https://openidconnect.googleapis.com/v1/userinfo')
         user_info = resp.json()
         
-        # Create or update user
+        # Create or update user - use email as fallback for user_id if 'id' is not present
+        user_id = user_info.get('id') or user_info.get('sub') or user_info['email']
+        
         user = User(
-            user_id=user_info['id'],
+            user_id=user_id,
             email=user_info['email'],
-            name=user_info['name'],
+            name=user_info.get('name', 'Unknown'),
             picture=user_info.get('picture')
         )
         
         user_session.add_user(user)
         login_user(user)
         
+        # Clear the oauth_state after successful login
+        session.pop('oauth_state', None)
+        
         return redirect(url_for('index'))
         
     except Exception as e:
         print(f"OAuth error: {e}")
+        # Clear any stale session data
+        session.pop('oauth_state', None)
         return redirect(url_for('login'))
 
 @app.route('/logout')
@@ -375,4 +398,4 @@ def growth_projection():
         })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001) 
+    app.run(debug=False, port=5001, host='127.0.0.1', use_reloader=False) 
