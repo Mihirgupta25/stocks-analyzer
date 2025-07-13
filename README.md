@@ -2,7 +2,14 @@
 
 A comprehensive web application for analyzing S&P 500 stocks and creating diversified portfolios with growth projections.
 
+**⚠️ Note: A Google account is required to use this application.**
+
 ## Features
+
+### 🔐 Authentication
+- **Google OAuth 2.0 Integration**: Secure login using your Google account
+- **No Registration Required**: Simply sign in with your existing Google credentials
+- **Session Management**: Automatic login persistence during your session
 
 ### 📊 Stock Analysis
 - Analyzes S&P 500 stocks using three key financial ratios:
@@ -71,8 +78,8 @@ A comprehensive web application for analyzing S&P 500 stocks and creating divers
 
 ### Authentication
 1. Visit the application at `http://localhost:5001`
-2. Click "Sign in with Google" to authenticate
-3. Grant permissions to access your Google account information
+2. **Sign in with your Google account** - A Google account is required to use this application
+3. Grant permissions to access your Google account information (email and profile)
 4. You'll be redirected to the dashboard after successful authentication
 
 ### Step 1: Stock Analysis
