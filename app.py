@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -8,9 +9,25 @@ import plotly.utils
 import json
 from sklearn.linear_model import LinearRegression
 import warnings
+import requests
+from requests_oauthlib import OAuth2Session
+import os
+from config import Config
+from models import User, user_session
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
+app.config.from_object(Config)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user from session storage"""
+    return user_session.get_user(user_id)
 
 # S&P 500 stock symbols (top 100 for demo purposes)
 SP500_SYMBOLS = [
@@ -203,9 +220,76 @@ def calculate_growth_projection(stock_symbol, months):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    if current_user.is_authenticated:
+        return render_template('dashboard.html')
+    return render_template('login.html')
+
+@app.route('/login')
+def login():
+    """Initiate Google OAuth login"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    google = OAuth2Session(
+        app.config['GOOGLE_CLIENT_ID'],
+        redirect_uri=request.url_root + 'callback'
+    )
+    
+    authorization_url, state = google.authorization_url(
+        'https://accounts.google.com/o/oauth2/auth',
+        access_type='offline',
+        scope=['openid', 'email', 'profile']
+    )
+    
+    session['oauth_state'] = state
+    return redirect(authorization_url)
+
+@app.route('/callback')
+def callback():
+    """Handle OAuth callback from Google"""
+    try:
+        google = OAuth2Session(
+            app.config['GOOGLE_CLIENT_ID'],
+            state=session.get('oauth_state'),
+            redirect_uri=request.url_root + 'callback'
+        )
+        
+        token = google.fetch_token(
+            'https://accounts.googleapis.com/oauth2/v4/token',
+            client_secret=app.config['GOOGLE_CLIENT_SECRET'],
+            authorization_response=request.url
+        )
+        
+        # Get user info from Google
+        resp = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
+        user_info = resp.json()
+        
+        # Create or update user
+        user = User(
+            user_id=user_info['id'],
+            email=user_info['email'],
+            name=user_info['name'],
+            picture=user_info.get('picture')
+        )
+        
+        user_session.add_user(user)
+        login_user(user)
+        
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        print(f"OAuth error: {e}")
+        return redirect(url_for('login'))
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout user"""
+    logout_user()
+    return redirect(url_for('index'))
 
 @app.route('/analyze', methods=['POST'])
+@login_required
 def analyze():
     try:
         # Analyze stocks
@@ -238,6 +322,7 @@ def analyze():
         })
 
 @app.route('/create_portfolio', methods=['POST'])
+@login_required
 def create_portfolio_route():
     try:
         data = request.get_json()
@@ -264,6 +349,7 @@ def create_portfolio_route():
         })
 
 @app.route('/growth_projection', methods=['POST'])
+@login_required
 def growth_projection():
     try:
         data = request.get_json()

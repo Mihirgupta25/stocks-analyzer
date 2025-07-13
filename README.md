@@ -28,6 +28,7 @@ A comprehensive web application for analyzing S&P 500 stocks and creating divers
 
 - **Backend**: Python Flask
 - **Frontend**: HTML5, CSS3, JavaScript (ES6+)
+- **Authentication**: Google OAuth 2.0 with Flask-Login
 - **Data Source**: Yahoo Finance API (via yfinance)
 - **Styling**: Bootstrap 5 + Custom CSS
 - **Charts**: Plotly (for future enhancements)
@@ -52,15 +53,27 @@ A comprehensive web application for analyzing S&P 500 stocks and creating divers
    pip install -r requirements.txt
    ```
 
-4. **Run the application**
+4. **Set up Google OAuth** (See [OAUTH_SETUP.md](OAUTH_SETUP.md) for detailed instructions)
+   - Create Google Cloud Console project
+   - Enable Google+ API
+   - Create OAuth 2.0 credentials
+   - Configure environment variables
+
+5. **Run the application**
    ```bash
    python app.py
    ```
 
-5. **Open your browser**
-   Navigate to `http://localhost:5000`
+6. **Open your browser**
+   Navigate to `http://localhost:5001`
 
 ## Usage
+
+### Authentication
+1. Visit the application at `http://localhost:5001`
+2. Click "Sign in with Google" to authenticate
+3. Grant permissions to access your Google account information
+4. You'll be redirected to the dashboard after successful authentication
 
 ### Step 1: Stock Analysis
 1. Click "Start Analysis" to begin analyzing S&P 500 stocks
